@@ -2,10 +2,9 @@
 
 namespace Harimayco\Menu;
 
-use App\Http\Requests;
-use Harimayco\Menu\Models\Menus;
+use DB;
 use Harimayco\Menu\Models\MenuItems;
-use Illuminate\Support\Facades\DB;
+use Harimayco\Menu\Models\Menus;
 
 class WMenu
 {
@@ -20,21 +19,22 @@ class WMenu
         //$roles = Role::all();
 
         if ((request()->has("action") && empty(request()->input("menu"))) || request()->input("menu") == '0') {
-            return view('wmenu::menu-html')->with("menulist" , $menulist);
+            return view('wmenu::menu-html')->with("menulist", $menulist);
         } else {
 
             $menu = Menus::find(request()->input("menu"));
             $menus = $menuitems->getall(request()->input("menu"));
 
-            $data = ['menus' => $menus, 'indmenu' => $menu, 'menulist' => $menulist];
-            if( config('menu.use_roles')) {
-                $data['roles'] = DB::table(config('menu.roles_table'))->select([config('menu.roles_pk'),config('menu.roles_title_field')])->get();
+            $menuFlat = self::getFlatTreeMenu(request()->input("menu"));
+
+            $data = ['menus' => $menus, 'indmenu' => $menu, 'menulist' => $menulist, 'menuFlat' => $menuFlat];
+            if (config('menu.use_roles')) {
+                $data['roles'] = DB::table(config('menu.roles_table'))->select([config('menu.roles_pk'), config('menu.roles_title_field')])->get();
                 $data['role_pk'] = config('menu.roles_pk');
                 $data['role_title_field'] = config('menu.roles_title_field');
             }
             return view('wmenu::menu-html', $data);
         }
-
     }
 
     public function scripts()
@@ -44,7 +44,7 @@ class WMenu
 
     public function select($name = "menu", $menulist = array())
     {
-        $html = '<select name="' . $name . '">';
+        $html = '<select name="' . $name . '" class="form-control browser-default">';
 
         foreach ($menulist as $key => $val) {
             $active = '';
@@ -56,7 +56,6 @@ class WMenu
         $html .= '</select>';
         return $html;
     }
-
 
     /**
      * Returns empty array if menu not found now.
@@ -82,6 +81,32 @@ class WMenu
         return $items;
     }
 
+    public static function getFlatTreeMenu($menu_id)
+    {
+        $menuItems = self::get($menu_id);
+        return self::menuTreeToFlatArray($menuItems);
+    }
+
+    private static function menuTreeToFlatArray($menuItems)
+    {
+        $items = [];
+        foreach ($menuItems as $menuItem) {
+            $children = [];
+            if (isset($menuItem['child']) && is_array($menuItem['child']) && count($menuItem['child']) > 0) {
+                $children = $menuItem['child'];
+                unset($menuItem['child']);
+            }
+
+            $items[] = $menuItem;
+
+            if (count($children) > 0) {
+                $items = array_merge($items, self::menuTreeToFlatArray($children));
+            }
+        }
+
+        return $items;
+    }
+
     private static function tree($items, $all_items)
     {
         $data_arr = array();
@@ -101,5 +126,4 @@ class WMenu
 
         return $data_arr;
     }
-
 }
